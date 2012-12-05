@@ -146,6 +146,9 @@ void *worker(void *data)
     char pBuffer[BUFFER_SIZE];
     char method[BUFFER_SIZE];
     char path[BUFFER_SIZE];
+    char *scheme;
+    char url[BUFFER_SIZE];
+    char *hostname;
     pthread_mutex_lock(&lock);
     while(num == 0)
       pthread_cond_wait(&empty, &lock);
@@ -158,7 +161,7 @@ void *worker(void *data)
     /* Process information */ 
     read(hSocket, pBuffer, BUFFER_SIZE);
     
-    if(sscanf(pBuffer, "%[^ ] %[^ ]", method, path) < 2)
+    if(sscanf(pBuffer, "%[^ ] %[^ ]", method, url) < 2)
     {
       send_error(hSocket, BAD_REQUEST, "Not the accepted protocol");
       continue;
@@ -170,6 +173,8 @@ void *worker(void *data)
       continue;
     }
     
+    parse_url(url, &scheme, &hostname, path);
+    
     char *path_ptr = path;
     if(path[0] == '/')
       path_ptr = &(path[1]);
@@ -180,7 +185,7 @@ void *worker(void *data)
       send_error(hSocket, BAD_REQUEST, "Tried to access a private file");
       continue;
     }
-      
+    
     FILE *f = fopen(path_ptr, "r");
     if(f)
     {
@@ -189,7 +194,7 @@ void *worker(void *data)
     }
     else
     {
-      send_error(hSocket, NOT_FOUND, "Unable to locate file");
+      send_error(hSocket, NOT_FOUND, "Unable to open file");
       continue;
     } 
      
