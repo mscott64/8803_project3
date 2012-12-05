@@ -5,7 +5,7 @@
 #define DEFAULT_PROXY_ADDR 5678
 #define DEFAULT_MACHINE "michelle-VirtualBox"
 #define DEFAULT_REQUESTS 500
-#define DEFAULT_NUM_FILES 100
+#define DEFAULT_NUM_FILES 50
 #define GET "GET http://michelle-VirtualBox:1234/files/file"
 #define NUM_THREADS_CLIENT 5
 #define NUM_THREADS_SERVER 10
