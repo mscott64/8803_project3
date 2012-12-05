@@ -13,3 +13,5 @@ Usage:
 	    [-f num_files]
 ./client_ex -u prints the usage
 
+./proxy_ex [-p port_num] [-t num_threads]
+./proxy_ex -u prints the usage
