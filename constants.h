@@ -24,7 +24,7 @@
 #define LOCAL_IP_ADDR "127.0.1.1"
 #define LOCAL_GET "LOCAL_GET"
 #define SUCCESS "Successful write"
-#define SHMEM_PATH ".."
+#define SHMEM_PATH "."
 #define SVSHM_MODE SHM_R | SHM_W | (SHM_R>>3) | (SHM_W>>3) | (SHM_R>>6) | (SHM_W>>6)
 
 #endif /* CONSTANTS_H */
