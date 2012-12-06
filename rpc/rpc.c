@@ -2,6 +2,7 @@
 
 #include <assert.h>
 #include <constants.h>
+#include <fcntl.h>
 #include <lowres.h>
 #include <netdb.h>
 #include <netinet/in.h>
@@ -147,11 +148,11 @@ void *worker(void *data)
   while(1)
   {
     char pBuffer[BUFFER_SIZE];
-    char method[BUFFER_SIZE];
     char path[BUFFER_SIZE];
     char *scheme;
     char url[BUFFER_SIZE];
     char *hostname;
+    
     pthread_mutex_lock(&lock);
     while(num == 0)
       pthread_cond_wait(&empty, &lock);
@@ -164,44 +165,52 @@ void *worker(void *data)
     /* Process information */ 
     read(hSocket, pBuffer, BUFFER_SIZE);
     
-    if(sscanf(pBuffer, "%[^ ] %[^ ]", method, url) < 2)
+    key_t key;
+    void *shmem;
+    
+    if(sscanf(pBuffer, "%[^ ] %d", url, &key) < 2)
     {
       send_error(hSocket, BAD_REQUEST, "Not the accepted protocol");
       continue;
     }
-      
-    if(strcasecmp(method, "get") != 0)
-    {
-      send_error(hSocket, NOT_IMPLEMENTED, "Only implemented GET");
-      continue;
-    }
-    
     parse_url(url, &scheme, &hostname, path);
     
-    char *path_ptr = path;
-    if(path[0] == '/')
-      path_ptr = &(path[1]);
-    
-    int len = strlen(path_ptr);
-    if(*path_ptr == '/' || strcmp(path_ptr, "..") == 0 || strncmp(path_ptr, "../", 3) == 0 || strstr(path_ptr, "/../") != NULL || strcmp(&(path_ptr[len-3]), "/..") == 0)
+    int fd = open(path, O_RDONLY);
+    if(fd < 0)
     {
-      send_error(hSocket, BAD_REQUEST, "Tried to access a private file");
+      send_error(hSocket, INTERNAL_ERROR, "Unable to open image file");
       continue;
     }
     
-    FILE *f = fopen(path_ptr, "r");
-    if(f)
+    /* Open the output shared memory segment */
+    int id = shmget(key, 0, SVSHM_MODE);
+    if(id < 0)
     {
-      while(fgets(pBuffer, BUFFER_SIZE, f) != NULL)
-	write(hSocket, pBuffer, strlen(pBuffer));
-    }
-    else
-    {
-      send_error(hSocket, NOT_FOUND, "Unable to open file");
+      send_error(hSocket, INTERNAL_ERROR, "Unable to retrieve shared memory segment");
       continue;
-    } 
-     
-    fclose(f);
+    }
+    
+    shmem = shmat(id, NULL, 0);
+    if(shmem == (void *)-1)
+    {
+      send_error(hSocket, INTERNAL_ERROR, "Unable to attach shared memory segment");
+      continue;
+    }
+
+    /* Compress the image */
+    int img_size;
+    int e = change_res_JPEG(fd, (char **)&shmem, &img_size);
+    shmdt(shmem);
+    if(e == 0)
+    {
+      send_error(hSocket, INTERNAL_ERROR, "Unable to grab image");
+      continue;
+    } else {
+      printf("New image size: %d\n", img_size);
+      sprintf(pBuffer, "%s", SUCCESS);
+      write(hSocket, pBuffer, strlen(pBuffer));
+    }
+    
     if(close(hSocket) == SOCKET_ERROR)
     {
       printf("Could not close socket\n");
