@@ -1,16 +1,18 @@
-// proxy.c
+// rpc.c
 
 #include <assert.h>
 #include <constants.h>
 #include <lowres.h>
 #include <netdb.h>
 #include <netinet/in.h>
-#include <proxy.h>
 #include <pthread.h>
+#include <rpc.h>
 #include <shared.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <sys/ipc.h>
+#include <sys/shm.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -26,7 +28,7 @@ pthread_cond_t full = PTHREAD_COND_INITIALIZER;
 void *boss(void *data);
 void *worker(void *data);
 
-int port_num = DEFAULT_PROXY_ADDR;
+int port_num = DEFAULT_RPC_ADDR;
 int num_threads = NUM_THREADS_SERVER;
 
 int main(int argc, char *argv[])
@@ -66,11 +68,11 @@ int main(int argc, char *argv[])
     return 0;
   }
   
-  proxy_create();
+  rpc_create();
   return 0;
 }
 
-void proxy_create(void)
+void rpc_create(void)
 {
   pthread_t boss_thread;
   pthread_t workers[num_threads];
@@ -78,7 +80,7 @@ void proxy_create(void)
   e = pthread_create(&boss_thread, NULL, boss, NULL);
   assert(e == 0);
 
-  for(i = 0; i < num_threads; i++) 
+  for(i = 0; i < num_threads; i++)
   {
     e = pthread_create(&workers[i], NULL, worker, NULL);
     assert(e == 0);
@@ -161,7 +163,7 @@ void *worker(void *data)
     
     /* Process information */ 
     read(hSocket, pBuffer, BUFFER_SIZE);
-      
+    
     if(sscanf(pBuffer, "%[^ ] %[^ ]", method, url) < 2)
     {
       send_error(hSocket, BAD_REQUEST, "Not the accepted protocol");
@@ -173,65 +175,38 @@ void *worker(void *data)
       send_error(hSocket, NOT_IMPLEMENTED, "Only implemented GET");
       continue;
     }
-
-    int req_port = parse_url(url, &scheme, &hostname, path);
-    if(strcasecmp(scheme, "http") != 0)
+    
+    parse_url(url, &scheme, &hostname, path);
+    
+    char *path_ptr = path;
+    if(path[0] == '/')
+      path_ptr = &(path[1]);
+    
+    int len = strlen(path_ptr);
+    if(*path_ptr == '/' || strcmp(path_ptr, "..") == 0 || strncmp(path_ptr, "../", 3) == 0 || strstr(path_ptr, "/../") != NULL || strcmp(&(path_ptr[len-3]), "/..") == 0)
     {
-      send_error(hSocket, NOT_IMPLEMENTED, "Only implemented http");
-      continue;
-    }
-
-    /* Connect to server */
-    int fwdSocket; /* handle to socket */
-    struct hostent *pHostInfo; /* holds info about machine */
-    struct sockaddr_in address; /* Internet socket address struct */
-    long nHostAddress;
-    char strHostName[HOST_NAME_SIZE];
-    int nHostPort;
-    char output[BUFFER_SIZE];
-    
-    strcpy(strHostName, hostname);
-    nHostPort = req_port;
-    
-    pthread_mutex_lock(&lock);
-    pHostInfo = gethostbyname(strHostName);
-    pthread_mutex_unlock(&lock);
-    
-    memcpy(&nHostAddress, pHostInfo->h_addr, pHostInfo->h_length);
-    
-    address.sin_addr.s_addr = nHostAddress;
-    address.sin_port = htons(nHostPort);
-    address.sin_family = AF_INET;
-    
-    fwdSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if(fwdSocket == SOCKET_ERROR)
-    {
-      send_error(hSocket, INTERNAL_ERROR, "Unable to create connection");
+      send_error(hSocket, BAD_REQUEST, "Tried to access a private file");
       continue;
     }
     
-    if(connect(fwdSocket, (struct sockaddr *)&address, sizeof(address)) == SOCKET_ERROR)
+    FILE *f = fopen(path_ptr, "r");
+    if(f)
     {
-      send_error(hSocket, INTERNAL_ERROR, "Could not connect to host machine");
+      while(fgets(pBuffer, BUFFER_SIZE, f) != NULL)
+	write(hSocket, pBuffer, strlen(pBuffer));
+    }
+    else
+    {
+      send_error(hSocket, NOT_FOUND, "Unable to open file");
       continue;
-    }
-    
-    // forward request
-    write(fwdSocket, pBuffer, strlen(pBuffer));
-    
-    // read response
-    int bytesRead = read(fwdSocket, output, BUFFER_SIZE);
-    while(bytesRead > 0)
-    {
-      write(hSocket, output, bytesRead);
-      bytesRead = read(fwdSocket, output, BUFFER_SIZE);
-    }
-    
-    if(close(fwdSocket) == SOCKET_ERROR)
-      printf("Could not close fwdSocket\n");
-    
+    } 
+     
+    fclose(f);
     if(close(hSocket) == SOCKET_ERROR)
-      printf("Could not close hSocket\n");
+    {
+      printf("Could not close socket\n");
+      continue;
+    }
   }
   return NULL;
 }
