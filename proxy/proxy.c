@@ -237,7 +237,7 @@ void *worker(void *data)
     if(bytesRead > 0)
     { // Establish RPC connection
       strcpy(strHostName, DEFAULT_MACHINE);
-      nHostPort = DEFAULT_PROXY_ADDR + encrypt;
+      nHostPort = DEFAULT_RPC_ADDR + encrypt;
     
       pthread_mutex_lock(&host_lock);
       pHostInfo = gethostbyname(strHostName);
