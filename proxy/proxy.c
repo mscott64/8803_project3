@@ -234,34 +234,36 @@ void *worker(void *data)
     
     // read response
     int bytesRead = read(fwdSocket, output, BUFFER_SIZE);
-    if(bytesRead > 0)
-    { // Establish RPC connection
-      strcpy(strHostName, DEFAULT_MACHINE);
-      nHostPort = DEFAULT_RPC_ADDR + encrypt;
     
-      pthread_mutex_lock(&host_lock);
-      pHostInfo = gethostbyname(strHostName);
-      pthread_mutex_unlock(&host_lock);
+    // Establish RPC connection
+    strcpy(strHostName, DEFAULT_MACHINE);
+    nHostPort = DEFAULT_RPC_ADDR + encrypt;
     
-      memcpy(&nHostAddress, pHostInfo->h_addr, pHostInfo->h_length);
+    pthread_mutex_lock(&host_lock);
+    pHostInfo = gethostbyname(strHostName);
+    pthread_mutex_unlock(&host_lock);
     
-      address.sin_addr.s_addr = nHostAddress;
-      address.sin_port = htons(nHostPort);
-      address.sin_family = AF_INET;
-      
-      rpcSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-      if(rpcSocket == SOCKET_ERROR)
-      {
-	send_error(hSocket, INTERNAL_ERROR, "Unable to create connection");
-	continue;
-      }
+    memcpy(&nHostAddress, pHostInfo->h_addr, pHostInfo->h_length);
     
-      if(connect(rpcSocket, (struct sockaddr *)&address, sizeof(address)) == SOCKET_ERROR)
-      {
-	send_error(hSocket, INTERNAL_ERROR, "Could not connect to host machine");
-	continue;
-      }
+    address.sin_addr.s_addr = nHostAddress;
+    address.sin_port = htons(nHostPort);
+    address.sin_family = AF_INET;
+    
+    rpcSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if(rpcSocket == SOCKET_ERROR)
+    {
+      close(fwdSocket);
+      send_error(hSocket, INTERNAL_ERROR, "Unable to create connection");
+      continue;
     }
+    
+    if(connect(rpcSocket, (struct sockaddr *)&address, sizeof(address)) == SOCKET_ERROR)
+    {
+      close(fwdSocket);
+      send_error(hSocket, INTERNAL_ERROR, "Could not connect to rpc machine");
+      continue;
+    }
+    
     while(bytesRead > 0)
     {
       // send to encryption or decryption
@@ -271,7 +273,9 @@ void *worker(void *data)
       bytesRead = read(fwdSocket, output, BUFFER_SIZE);
     }
     
-    close(rpcSocket);
+    if(close(rpcSocket) == SOCKET_ERROR)
+      printf("Could not close rpcSocket");
+
     if(close(fwdSocket) == SOCKET_ERROR)
       printf("Could not close fwdSocket\n");
     

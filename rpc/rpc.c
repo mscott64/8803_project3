@@ -170,10 +170,7 @@ void *worker(void *data)
     write(hSocket, pBuffer, readBytes);
     
     if(close(hSocket) == SOCKET_ERROR)
-    {
       printf("Could not close socket\n");
-      continue;
-    }
   }
   return NULL;
 }

@@ -40,12 +40,6 @@ int main(int argc, char *argv[])
   {
     switch(c)
     {
-    case 'h':
-      hostname = optarg;
-      break;
-    case 'p':
-      port_num = atoi(optarg);
-      break;
     case 'r':
       num_requests = atoi(optarg);
       break;
@@ -56,15 +50,13 @@ int main(int argc, char *argv[])
       num_files = atoi(optarg);
       break;
     case '?':
-      if(optopt == 'p' || optopt == 'h' || optopt == 'r' || optopt == 't' || optopt == 'f')
+      if(optopt == 'r' || optopt == 't' || optopt == 'f')
 	printf("Option -%c requires an argument", optopt);
       else
 	printf("Unknown option -%c\n", optopt);
     case 'u': 
     default:
-      printf("Usage:\n%s [-h hostname]\n", argv[0]);
-      printf("\t    [-p port_num]\n");
-      printf("\t    [-r num_requests]\n");
+      printf("Usage:\n%s [-r num_requests]\n", argv[0]);
       printf("\t    [-t num_threads]\n");
       printf("\t    [-f num_files]\n");
       printf("%s -u prints the usage\n", argv[0]);
