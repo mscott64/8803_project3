@@ -160,13 +160,12 @@ void *worker(void *data)
     
     /* Process information */ 
     int readBytes = read(hSocket, pBuffer, BUFFER_SIZE);
-    
     int i;
     for(i = 0; i < readBytes; i++)
     {
       pBuffer[i] = pBuffer[i] ^ KEY;
     }    
-    
+      
     write(hSocket, pBuffer, readBytes);
     
     if(close(hSocket) == SOCKET_ERROR)

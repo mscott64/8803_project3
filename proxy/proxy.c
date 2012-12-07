@@ -180,7 +180,7 @@ void *worker(void *data)
       continue;
     }
 
-    if(encrypt) 
+    if(encrypt == 1) 
     {
       req_port = parse_url(url, &scheme, &hostname, path);
       if(strcasecmp(scheme, "http") != 0)
@@ -249,32 +249,30 @@ void *worker(void *data)
     address.sin_port = htons(nHostPort);
     address.sin_family = AF_INET;
     
-    rpcSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
-    if(rpcSocket == SOCKET_ERROR)
-    {
-      close(fwdSocket);
-      send_error(hSocket, INTERNAL_ERROR, "Unable to create connection");
-      continue;
-    }
-    
-    if(connect(rpcSocket, (struct sockaddr *)&address, sizeof(address)) == SOCKET_ERROR)
-    {
-      close(fwdSocket);
-      send_error(hSocket, INTERNAL_ERROR, "Could not connect to rpc machine");
-      continue;
-    }
-    
     while(bytesRead > 0)
-    {
-      // send to encryption or decryption
+    { // send to encryption or decryption
+      rpcSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+      if(rpcSocket == SOCKET_ERROR)
+      {
+	close(fwdSocket);
+	send_error(hSocket, INTERNAL_ERROR, "Unable to create connection");
+	continue;
+      }
+      
+      if(connect(rpcSocket, (struct sockaddr *)&address, sizeof(address)) == SOCKET_ERROR)
+      {
+	close(fwdSocket);
+	send_error(hSocket, INTERNAL_ERROR, "Could not connect to rpc machine");
+	continue;
+      }
       write(rpcSocket, output, bytesRead);
-      read(rpcSocket, output, bytesRead);
+      bytesRead = read(rpcSocket, output, BUFFER_SIZE);
       write(hSocket, output, bytesRead);
       bytesRead = read(fwdSocket, output, BUFFER_SIZE);
+
+      if(close(rpcSocket) == SOCKET_ERROR)
+      printf("Could not close rpcSocket\n");
     }
-    
-    if(close(rpcSocket) == SOCKET_ERROR)
-      printf("Could not close rpcSocket");
 
     if(close(fwdSocket) == SOCKET_ERROR)
       printf("Could not close fwdSocket\n");
