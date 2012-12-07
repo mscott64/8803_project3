@@ -21,18 +21,20 @@ int rem = 0;
 pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t empty = PTHREAD_COND_INITIALIZER;
 pthread_cond_t full = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t host_lock = PTHREAD_MUTEX_INITIALIZER;
 
 void *boss(void *data);
 void *worker(void *data);
 
 int port_num = DEFAULT_PROXY_ADDR;
 int num_threads = NUM_THREADS_SERVER;
+int encrypt = 0;
 
 int main(int argc, char *argv[])
 {
   int c;
   opterr = 0;
-  while((c = getopt(argc, argv, "up:t:")) != -1)
+  while((c = getopt(argc, argv, "eup:t:")) != -1)
   {
     switch(c)
     {
@@ -42,6 +44,9 @@ int main(int argc, char *argv[])
     case't':
       num_threads = atoi(optarg);
       break;
+    case 'e':
+      encrypt = 1;
+      break;
     case '?':
       if(optopt == 'p' || optopt == 't')
 	printf("Option -%c requires an argument\n", optopt);
@@ -49,7 +54,7 @@ int main(int argc, char *argv[])
 	printf("Unknown option -%c\n", optopt);
     case 'u':
     default:
-      printf("Usage:\n%s [-p port_num] [-t num_threads]\n", argv[0]);
+      printf("Usage:\n%s [-p port_num]\n\t   [-t num_threads]\n\t   [-e encrypt]\n", argv[0]);
       printf("%s -u prints the usage\n", argv[0]);
       return 0;
     }
@@ -98,7 +103,7 @@ void *boss(void *data)
   int hSocket, hServerSocket; /* handle to socket */
   struct sockaddr_in address; /* Internet socket address struct */
   int nAddressSize = sizeof(struct sockaddr_in);
-  int nHostPort = port_num;
+  int nHostPort = port_num + encrypt;
 
   hServerSocket = socket(AF_INET, SOCK_STREAM, 0);
   if(hServerSocket == SOCKET_ERROR)
@@ -141,6 +146,8 @@ void *boss(void *data)
 void *worker(void *data)
 {
   int hSocket;
+  int req_port;
+  int rpcSocket;
   while(1)
   {
     char pBuffer[BUFFER_SIZE];
@@ -173,11 +180,18 @@ void *worker(void *data)
       continue;
     }
 
-    int req_port = parse_url(url, &scheme, &hostname, path);
-    if(strcasecmp(scheme, "http") != 0)
+    if(encrypt) 
     {
-      send_error(hSocket, NOT_IMPLEMENTED, "Only implemented http");
-      continue;
+      req_port = parse_url(url, &scheme, &hostname, path);
+      if(strcasecmp(scheme, "http") != 0)
+      {
+	send_error(hSocket, NOT_IMPLEMENTED, "Only implemented http");
+	continue;
+      }
+    } else {
+      // Connect to other proxy
+      req_port = DEFAULT_PROXY_ADDR + 1;
+      hostname = DEFAULT_MACHINE;
     }
 
     /* Connect to server */
@@ -192,9 +206,9 @@ void *worker(void *data)
     strcpy(strHostName, hostname);
     nHostPort = req_port;
     
-    pthread_mutex_lock(&lock);
+    pthread_mutex_lock(&host_lock);
     pHostInfo = gethostbyname(strHostName);
-    pthread_mutex_unlock(&lock);
+    pthread_mutex_unlock(&host_lock);
     
     memcpy(&nHostAddress, pHostInfo->h_addr, pHostInfo->h_length);
     
@@ -220,12 +234,44 @@ void *worker(void *data)
     
     // read response
     int bytesRead = read(fwdSocket, output, BUFFER_SIZE);
+    if(bytesRead > 0)
+    { // Establish RPC connection
+      strcpy(strHostName, DEFAULT_MACHINE);
+      nHostPort = DEFAULT_PROXY_ADDR + encrypt;
+    
+      pthread_mutex_lock(&host_lock);
+      pHostInfo = gethostbyname(strHostName);
+      pthread_mutex_unlock(&host_lock);
+    
+      memcpy(&nHostAddress, pHostInfo->h_addr, pHostInfo->h_length);
+    
+      address.sin_addr.s_addr = nHostAddress;
+      address.sin_port = htons(nHostPort);
+      address.sin_family = AF_INET;
+      
+      rpcSocket = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+      if(rpcSocket == SOCKET_ERROR)
+      {
+	send_error(hSocket, INTERNAL_ERROR, "Unable to create connection");
+	continue;
+      }
+    
+      if(connect(rpcSocket, (struct sockaddr *)&address, sizeof(address)) == SOCKET_ERROR)
+      {
+	send_error(hSocket, INTERNAL_ERROR, "Could not connect to host machine");
+	continue;
+      }
+    }
     while(bytesRead > 0)
     {
+      // send to encryption or decryption
+      write(rpcSocket, output, bytesRead);
+      read(rpcSocket, output, bytesRead);
       write(hSocket, output, bytesRead);
       bytesRead = read(fwdSocket, output, BUFFER_SIZE);
     }
     
+    close(rpcSocket);
     if(close(fwdSocket) == SOCKET_ERROR)
       printf("Could not close fwdSocket\n");
     

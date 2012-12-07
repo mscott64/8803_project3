@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
 	printf("Unknown option -%c\n", optopt);
     case 'u':
     default:
-      printf("Usage:\n%s [-p port_num] [-t num_threads]\n", argv[0]);
+      printf("Usage:\n%s [-p port_num]\n\t [-t num_threads]\n\t [-e encrypt]\n", argv[0]);
       printf("%s -u prints the usage\n", argv[0]);
       return 0;
     }
