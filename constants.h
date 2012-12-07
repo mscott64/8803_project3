@@ -26,5 +26,5 @@
 #define SUCCESS "Successful write"
 #define SHMEM_PATH "."
 #define SVSHM_MODE SHM_R | SHM_W | (SHM_R>>3) | (SHM_W>>3) | (SHM_R>>6) | (SHM_W>>6)
-
+#define KEY 'M'
 #endif /* CONSTANTS_H */

@@ -2,8 +2,6 @@
 
 #include <assert.h>
 #include <constants.h>
-#include <fcntl.h>
-#include <lowres.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <pthread.h>
@@ -12,8 +10,6 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <sys/ipc.h>
-#include <sys/shm.h>
 #include <sys/socket.h>
 #include <sys/types.h>
 #include <unistd.h>
@@ -31,12 +27,13 @@ void *worker(void *data);
 
 int port_num = DEFAULT_RPC_ADDR;
 int num_threads = NUM_THREADS_SERVER;
+int encrypt = 0;
 
 int main(int argc, char *argv[])
 {
   int c;
   opterr = 0;
-  while((c = getopt(argc, argv, "up:t:")) != -1)
+  while((c = getopt(argc, argv, "uep:t:")) != -1)
   {
     switch(c)
     {
@@ -45,6 +42,9 @@ int main(int argc, char *argv[])
       break;
     case't':
       num_threads = atoi(optarg);
+      break;
+    case 'e':
+      encrypt = 1;
       break;
     case '?':
       if(optopt == 'p' || optopt == 't')
@@ -102,7 +102,7 @@ void *boss(void *data)
   int hSocket, hServerSocket; /* handle to socket */
   struct sockaddr_in address; /* Internet socket address struct */
   int nAddressSize = sizeof(struct sockaddr_in);
-  int nHostPort = port_num;
+  int nHostPort = port_num + encrypt;
 
   hServerSocket = socket(AF_INET, SOCK_STREAM, 0);
   if(hServerSocket == SOCKET_ERROR)
@@ -148,10 +148,6 @@ void *worker(void *data)
   while(1)
   {
     char pBuffer[BUFFER_SIZE];
-    char path[BUFFER_SIZE];
-    char *scheme;
-    char url[BUFFER_SIZE];
-    char *hostname;
     
     pthread_mutex_lock(&lock);
     while(num == 0)
@@ -163,53 +159,15 @@ void *worker(void *data)
     pthread_cond_signal(&full);
     
     /* Process information */ 
-    read(hSocket, pBuffer, BUFFER_SIZE);
+    int readBytes = read(hSocket, pBuffer, BUFFER_SIZE);
     
-    key_t key;
-    void *shmem;
+    int i;
+    for(i = 0; i < readBytes; i++)
+    {
+      pBuffer[i] = pBuffer[i] ^ KEY;
+    }    
     
-    if(sscanf(pBuffer, "%[^ ] %d", url, &key) < 2)
-    {
-      send_error(hSocket, BAD_REQUEST, "Not the accepted protocol");
-      continue;
-    }
-    parse_url(url, &scheme, &hostname, path);
-    
-    int fd = open(path, O_RDONLY);
-    if(fd < 0)
-    {
-      send_error(hSocket, INTERNAL_ERROR, "Unable to open image file");
-      continue;
-    }
-    
-    /* Open the output shared memory segment */
-    int id = shmget(key, 0, SVSHM_MODE);
-    if(id < 0)
-    {
-      send_error(hSocket, INTERNAL_ERROR, "Unable to retrieve shared memory segment");
-      continue;
-    }
-    
-    shmem = shmat(id, NULL, 0);
-    if(shmem == (void *)-1)
-    {
-      send_error(hSocket, INTERNAL_ERROR, "Unable to attach shared memory segment");
-      continue;
-    }
-
-    /* Compress the image */
-    int img_size;
-    int e = change_res_JPEG(fd, (char **)&shmem, &img_size);
-    shmdt(shmem);
-    if(e == 0)
-    {
-      send_error(hSocket, INTERNAL_ERROR, "Unable to grab image");
-      continue;
-    } else {
-      printf("New image size: %d\n", img_size);
-      sprintf(pBuffer, "%s", SUCCESS);
-      write(hSocket, pBuffer, strlen(pBuffer));
-    }
+    write(hSocket, pBuffer, readBytes);
     
     if(close(hSocket) == SOCKET_ERROR)
     {

@@ -2,7 +2,6 @@
 
 #include <assert.h>
 #include <constants.h>
-#include <lowres.h>
 #include <netdb.h>
 #include <netinet/in.h>
 #include <proxy.h>

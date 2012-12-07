@@ -1,5 +1,5 @@
 CC=gcc
-CFLAGS=-I. -I./client -I./proxy -I./shared -I./server -I./jpeg-6b -I./rpc -lpthread -Wall
+CFLAGS=-I. -I./client -I./proxy -I./shared -I./server -I./rpc -lpthread -Wall
 
 all: client_ex proxy_ex server_ex rpc_ex
 
@@ -12,7 +12,7 @@ proxy_ex: obj/proxy.o obj/shared.o
 server_ex: obj/server.o obj/shared.o
 	$(CC) -o $@ $^ $(CFLAGS)
 
-rpc_ex: obj/rpc.o obj/shared.o obj/lowres.o obj/lowres-write.o jpeg-6b/libjpeg.a
+rpc_ex: obj/rpc.o obj/shared.o
 	$(CC) -o $@ $^ $(CFLAGS)
 
 obj/client.o: client/client.c client/client.h constants.h
@@ -28,12 +28,6 @@ obj/rpc.o: rpc/rpc.c rpc/rpc.h constants.h
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 obj/shared.o: shared/shared.c shared/shared.h constants.h
-	$(CC) -c -o $@ $< $(CFLAGS)
-
-obj/lowres.o: jpeg-6b/lowres.c jpeg-6b/lowres.h
-	$(CC) -c -o $@ $< $(CFLAGS)
-
-obj/lowres-write.o: jpeg-6b/lowres-write.c
 	$(CC) -c -o $@ $< $(CFLAGS)
 
 clean:
