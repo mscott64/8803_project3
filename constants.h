@@ -11,6 +11,7 @@
 #define DEFAULT_REQUESTS 500
 #define DEFAULT_NUM_FILES 50
 #define GET "GET http://michelle-VirtualBox:1234/files/file"
+#define GET_BIG "GET http://michelle-VirtualBox:1234/files/fileBig"
 #define NUM_THREADS_CLIENT 5
 #define NUM_THREADS_SERVER 10
 #define Q_SIZE 1000

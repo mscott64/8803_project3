@@ -29,6 +29,7 @@ pthread_mutex_t stats_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_mutex_t start_lock = PTHREAD_MUTEX_INITIALIZER;
 pthread_cond_t start = PTHREAD_COND_INITIALIZER;
 int should_start = 0;
+int big_files = 0;
 
 void *load(void *data);
 
@@ -36,10 +37,13 @@ int main(int argc, char *argv[])
 {
   int c;
   opterr = 0;
-  while((c = getopt(argc, argv, "uh:p:r:t:f:")) != -1)
+  while((c = getopt(argc, argv, "buh:p:r:t:f:")) != -1)
   {
     switch(c)
     {
+    case 'b':
+      big_files = 1;
+      break;
     case 'r':
       num_requests = atoi(optarg);
       break;
@@ -59,6 +63,7 @@ int main(int argc, char *argv[])
       printf("Usage:\n%s [-r num_requests]\n", argv[0]);
       printf("\t    [-t num_threads]\n");
       printf("\t    [-f num_files]\n");
+      printf("\t    [-b big_files]\n");
       printf("%s -u prints the usage\n", argv[0]);
       return 0;
     }
@@ -163,7 +168,10 @@ void *load(void *data)
       return NULL;
     }
     int file_num = (rand() % num_files) + 1;
-    sprintf(request, "%s%d.html", GET, file_num);
+    if(big_files == 1) 
+      sprintf(request, "%s%d.html", GET_BIG, file_num);
+    else 
+      sprintf(request, "%s%d.html", GET, file_num);
     time_t start_time = time(NULL);
     write(hSocket, request, strlen(request));
     char output[BUFFER_SIZE];
